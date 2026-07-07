@@ -1,0 +1,19 @@
+# Keep the build context small and the image slim.
+venv/
+.git/
+.github/
+__pycache__/
+**/__pycache__/
+*.pyc
+tests/
+Notebook/
+catboost_info/
+mlruns/
+mlartifacts/
+logs/
+*.md
+.gitignore
+.dockerignore
+.ebextensions/
+buildspec.yml
+requirements-dev.txt
