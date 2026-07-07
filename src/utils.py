@@ -10,23 +10,18 @@
 # ---------------------------------------------
 # OS Library for interacting with the operating system
 # SYS Library for system-specific parameters and functions
-# Numpy for numerical operations
-# Pandas for data manipulation and analysis
-# Dill for serializing and deserializing Python objects
 # Pickle for object serialization
 # Sklearn's metrics for evaluating model performance
 # Sklearn's model_selection for hyperparameter tuning
 # src.exception for custom exception handling
 # =============================================
 import os
-import sys
-
-import numpy as np 
-import pandas as pd
 import pickle
+import sys
 
 from sklearn.metrics import r2_score
 from sklearn.model_selection import GridSearchCV
+
 from src.exception import CustomException
 
 
@@ -50,29 +45,32 @@ def save_object(file_path, obj):
 # =============================================
 # evaluate_models Function
 # ---------------------------------------------
-# This function evaluates multiple machine learning models using GridSearchCV for hyperparameter tuning.
-# It returns a report of the R2 scores for each model on the test dataset.
-# =============================================    
-def evaluate_models(X_train, y_train,X_test,y_test,models,param):
+# Tunes each model with GridSearchCV (cv=3) and records, per model:
+#   - cv_score   : mean cross-validated R2 (used for MODEL SELECTION, so we
+#                  never pick a model by looking at the held-out test set)
+#   - train_r2   : R2 on the training set (to spot over-fitting)
+#   - test_r2    : R2 on the held-out test set (reported once, for the winner)
+#   - best_params: the hyperparameters chosen by the grid search
+# Each tuned model instance is left fitted in `models`, so the caller can reuse
+# the winner directly without an extra refit.
+# =============================================
+def evaluate_models(X_train, y_train, X_test, y_test, models, param):
     try:
         report = {}
 
-        for i in range(len(list(models))):
-            model = list(models.values())[i]
-            para = param[list(models.keys())[i]]
-
-            gs = GridSearchCV(model,para,cv=3)
-            gs.fit(X_train,y_train)
+        for name, model in models.items():
+            gs = GridSearchCV(model, param[name], cv=3)
+            gs.fit(X_train, y_train)
 
             model.set_params(**gs.best_params_)
-            model.fit(X_train,y_train)
+            model.fit(X_train, y_train)
 
-            #model.fit(X_train, y_train)  # Train model
-            y_train_pred = model.predict(X_train)
-            y_test_pred = model.predict(X_test)
-            train_model_score = r2_score(y_train, y_train_pred)
-            test_model_score = r2_score(y_test, y_test_pred)
-            report[list(models.keys())[i]] = test_model_score
+            report[name] = {
+                "cv_score": gs.best_score_,
+                "train_r2": r2_score(y_train, model.predict(X_train)),
+                "test_r2": r2_score(y_test, model.predict(X_test)),
+                "best_params": gs.best_params_,
+            }
 
         return report
 
