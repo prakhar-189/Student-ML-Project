@@ -1,184 +1,143 @@
-# 🎓 Student-Marks-Predictor
+# 🎓 Student Marks Predictor
 
-A production-ready machine learning web application that predicts student math scores using demographic and academic features, deployed on AWS with a fully automated CI/CD pipeline.
+[![CI](https://github.com/prakhar-189/Student-ML-Project/actions/workflows/ci.yml/badge.svg)](https://github.com/prakhar-189/Student-ML-Project/actions/workflows/ci.yml)
+[![Python](https://img.shields.io/badge/python-3.11-blue.svg)](https://www.python.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
+An end-to-end regression ML application that predicts a student's **math score** from demographic and academic features. It pairs a clean, modular training pipeline with **MLflow experiment tracking**, an automated **test + CI** workflow, a **Dockerized Flask service** (HTML form + JSON API), and an AWS Elastic Beanstalk deployment.
 
 ---
 
 ## 📌 Project Overview
 
-This project demonstrates how machine learning models can be deployed into production using **Flask, AWS Elastic Beanstalk, and automated CI/CD pipelines**. The system processes structured student data, applies preprocessing transformations, and predicts math scores using a trained regression model. The application is lightweight, scalable, and built with a clean modular ML architecture suitable for portfolio and real-world deployment scenarios.
+The project demonstrates a realistic ML workflow: ingest structured student data, build a reusable preprocessing pipeline, tune and compare several regression models with cross-validation, track every experiment in MLflow, serialize the winning model, and serve it behind a Flask web app and JSON API. Training is fully separated from inference so the deployed service stays lightweight.
 
 ---
 
 ## ✨ Features
 
-### 🎯 Regression-Based Score Prediction
-
-Predicts **Math Score** based on:
-
-- Gender  
-- Race/Ethnicity  
-- Parental Level of Education  
-- Lunch Type  
-- Test Preparation Course  
-- Writing Score  
-- Reading Score  
-
----
-
-### 🧹 Data Processing & Feature Engineering
-
-- Handles missing values  
-- Applies:
-  - One-Hot Encoding for categorical variables  
-  - Standard Scaling for numerical variables  
-- Uses a reusable preprocessing pipeline  
-- Saves preprocessor object for inference reuse  
-
----
-
-### 🧠 Model Training & Evaluation
-
-- Evaluated multiple regression models  
-- Selected best model based on **R² Score**  
-- Saved trained model using `pickle`  
-- Separated training and inference pipelines  
-
----
-
-### 💾 Model & Artifact Serialization
-
-- Stores trained model (`model.pkl`)  
-- Stores preprocessing pipeline (`preprocessor.pkl`)  
-- Eliminates retraining during deployment  
-- Optimized for inference-only production usage  
-
----
-
-### 🌐 Web Application (Flask)
-
-- Clean and minimal UI  
-- User-friendly form input  
-- Displays predicted math score  
-- Hosted on AWS Elastic Beanstalk  
-- Powered by Gunicorn WSGI server  
-
----
-
-### ☁ Fully Automated CI/CD Pipeline
-
-- GitHub → AWS CodePipeline → CodeBuild → Elastic Beanstalk  
-- Automatic deployment on every push  
-- No manual zip uploads required  
-- Versioned deployments via Elastic Beanstalk  
-
----
-
-### ⚡ Lightweight & Cloud-Optimized
-
-- Optimized for AWS t3.micro instance  
-- Removed heavy experimental libraries  
-- Training separated from production runtime  
-- Fast startup and low memory usage  
-
----
-
-### 🧩 Modular & Scalable Codebase
-
-The project is built in clearly separated stages:
-
-1. Data Ingestion  
-2. Data Transformation  
-3. Model Training  
-4. Prediction Pipeline  
-5. Web App Deployment  
-6. CI/CD Automation  
-
----
-
-## 📁 Project Structure
-
-- .ebextensions/
-  - python.config
-- Notebook/
-  - Dataset/
-    - Student.csv
-  - catboost_info/
-    - learn
-    - catboost_training.json
-    - learn_error.tsv
-    - time_left.tsv
-  - EDA Student Performance.ipynb
-  - Model Training.ipynb
-- artifacts/
-  - data.csv
-  - model.pkl
-  - preprocessor.pkl
-  - test.csv
-  - train.csv
-- src/
-  - components/
-    - __init__.py
-    - data_ingestion.py
-    - data_transformation.py
-    - model_trainer.py
-  - Pipeline/
-    - __init__.py
-    - predict_pipeline.py
-    - train_pipeline.py
-  - __init__.py
-  - exception.py
-  - logger.py
-  - utils.py
-- templates/
-  - home.html
-  - index.html
-- .gitignore
-- Procfile
-- README.md
-- app.py
-- application.py
-- buildspec.yml
-- requirements.txt
-- setup.py
+- **Regression-based score prediction** from gender, race/ethnicity, parental education, lunch type, test-prep course, and reading/writing scores.
+- **Reusable preprocessing pipeline** — median imputation + standard scaling for numeric features, most-frequent imputation + one-hot encoding for categoricals (`ColumnTransformer`), serialized as `preprocessor.pkl`.
+- **Model selection done right** — five regressors tuned with `GridSearchCV`, the winner chosen by **cross-validated R²** (never by peeking at the test set), with train/test R² tracked to surface over-fitting.
+- **MLflow experiment tracking** — every model's params and cv/train/test R² are logged and comparable in the MLflow UI.
+- **Web app + JSON API** — a Flask form (`/predictdata`) with input validation and a JSON endpoint (`POST /predict`) for programmatic use, served by Gunicorn.
+- **Tested & linted in CI** — `pytest` + `ruff` run on every push/PR via GitHub Actions.
+- **Containerized** — a `Dockerfile` runs the whole service anywhere.
+- **Modular pipeline** — Data Ingestion → Data Transformation → Model Training → Prediction, with custom logging and exceptions.
 
 ---
 
 ## 📊 Model Performance
 
-- Evaluation Metric: **R² Score**  
-- Final Selected Model: Linear Regression  
-- Designed for structured tabular data prediction  
+Five regressors were tuned with `GridSearchCV` (cv=3) on an 80/20 split of 1,000 records. The winner is selected by **cross-validated R²**; test R² is reported once for the selected model.
+
+| Model | CV R² | Train R² | Test R² |
+|-------|:-----:|:--------:|:-------:|
+| **Linear Regression** ✅ | **0.865** | 0.874 | **0.880** |
+| Gradient Boosting | 0.852 | 0.894 | 0.873 |
+| Random Forest | 0.832 | 0.976 | 0.852 |
+| AdaBoost | 0.826 | 0.847 | 0.848 |
+| Decision Tree | 0.713 | 1.000 | 0.729 |
+
+**Selected model: Linear Regression** — it has the best cross-validated score *and* generalizes best (test R² 0.880). Note how Decision Tree (train 1.000 / test 0.729) and Random Forest (train 0.976) memorize the training data — exactly the over-fitting that CV-based selection guards against.
+
+_Reproduce these numbers with `python -m src.pipeline.train_pipeline` and inspect the runs with `mlflow ui`._
 
 ---
 
-## 🛠️ Tools & Technologies Used
+## 📁 Project Structure
 
-- **Python 3.11**  
-- **Flask**  
-- **Scikit-learn**  
-- **Pandas & NumPy**  
-- **Gunicorn**  
-- **AWS Elastic Beanstalk**  
-- **AWS CodePipeline**  
-- **AWS CodeBuild**  
-- **GitHub**  
+```
+Student-ML-Project/
+├── .ebextensions/
+│   └── python.config
+├── .github/workflows/
+│   └── ci.yml                    # Lint (ruff) + tests (pytest) on push/PR
+├── Notebook/
+│   ├── Dataset/Student.csv
+│   ├── EDA Student Performance.ipynb
+│   └── Model Training.ipynb
+├── artifacts/                    # Generated: data splits, model.pkl, preprocessor.pkl
+├── src/
+│   ├── components/
+│   │   ├── data_ingestion.py
+│   │   ├── data_transformation.py
+│   │   └── model_trainer.py      # GridSearchCV + CV selection + MLflow logging
+│   ├── pipeline/
+│   │   ├── predict_pipeline.py
+│   │   └── train_pipeline.py
+│   ├── exception.py
+│   ├── logger.py
+│   └── utils.py
+├── templates/                    # home.html, index.html
+├── tests/                        # pytest: CustomData + Flask app/API
+├── app.py                        # Flask app: HTML form + JSON API + validation
+├── application.py                # WSGI entrypoint (Elastic Beanstalk)
+├── Dockerfile / .dockerignore
+├── conftest.py / ruff.toml
+├── Procfile / buildspec.yml
+├── requirements.txt              # Runtime dependencies
+└── requirements-dev.txt          # Training/CI deps (mlflow, pytest, ruff)
+```
 
 ---
 
-## ▶️ How to Run the Project Locally
+## 🛠️ Tech Stack
 
-pip install -r requirements.txt
-python app.py
+**Python 3.11** · **Flask** + **Gunicorn** · **scikit-learn** · **Pandas/NumPy** · **MLflow** · **pytest** + **ruff** · **Docker** · **GitHub Actions** · **AWS Elastic Beanstalk / CodePipeline / CodeBuild**
 
 ---
 
-## ▶️ How to Run the Project through URL
+## ▶️ Getting Started
 
-http://student-marks-predictor.us-east-1.elasticbeanstalk.com
+```bash
+# 1. Setup
+python -m venv venv && venv\Scripts\activate      # (Linux/macOS: source venv/bin/activate)
+pip install -r requirements.txt -r requirements-dev.txt
+
+# 2. (Optional) Retrain — writes artifacts/ and logs runs to MLflow
+python -m src.pipeline.train_pipeline
+mlflow ui                                          # view experiments at http://localhost:5000
+
+# 3. Run the web app
+python app.py                                      # http://localhost:5000
+```
+
+### JSON API
+
+```bash
+curl -X POST http://localhost:5000/predict \
+  -H "Content-Type: application/json" \
+  -d '{"gender":"male","race_ethnicity":"group C","parental_level_of_education":"some college","lunch":"standard","test_preparation_course":"completed","reading_score":74,"writing_score":71}'
+# -> {"math_score": 74.69}
+```
+
+Invalid input returns a `400` with a clear error message instead of leaking a stack trace.
+
+### Run the checks
+
+```bash
+ruff check .
+pytest -q
+```
+
+### Docker
+
+```bash
+docker build -t student-marks-predictor .
+docker run -p 5000:5000 student-marks-predictor
+```
+
+---
+
+## ☁️ Deployment & CI/CD
+
+The app is deployment-ready for **AWS Elastic Beanstalk**, wired to **GitHub → CodePipeline → CodeBuild → Elastic Beanstalk** (`buildspec.yml`, `.ebextensions/`, `Procfile`) for automatic deployment on push. A separate GitHub Actions workflow (`ci.yml`) lints and tests every change.
+
+> ℹ️ A public AWS demo URL may be intermittently offline, since the hosting resources can be torn down to avoid ongoing cloud costs. The app runs identically via `python app.py` or Docker.
 
 ---
 
 ## 👤 Author
-- Prakhar Srivastava
-- Aspiring Data Scientist & Business Analyst | Machine Learning, Deep Learning & Generative AI Enthusiast
+
+**Prakhar Srivastava** — Aspiring Data Scientist & ML Engineer | Machine Learning, Deep Learning & Generative AI
