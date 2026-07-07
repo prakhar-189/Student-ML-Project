@@ -32,12 +32,21 @@ from sklearn.ensemble import (
 )
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import r2_score
-from sklearn.neighbors import KNeighborsRegressor
 from sklearn.tree import DecisionTreeRegressor
 
 from src.exception import CustomException
 from src.logger import logging
-from src.utils import save_object,evaluate_models
+from src.utils import save_object, evaluate_models
+
+# MLflow is an optional training-time dependency. Import it defensively so the
+# deployed prediction path (which never trains) does not require it installed.
+try:
+    import mlflow
+    import mlflow.sklearn
+
+    _MLFLOW_AVAILABLE = True
+except ImportError:
+    _MLFLOW_AVAILABLE = False
 
 
 # =============================================
@@ -123,38 +132,63 @@ class ModelTrainer:
                 }
             }
             
-            # model_report is a dictionary that contains the R2 scores of each regression model on the test dataset.
-            # 'params = params' is passed to the evaluate_models function to perform hyperparameter tuning for each model using GridSearchCV or RandomizedSearchCV.
-            model_report:dict=evaluate_models(X_train=X_train,y_train=y_train,X_test=X_test,y_test=y_test,
-                                             models=models,param=params)
-            
-            # To get best model score from dict
-            best_model_score = max(sorted(model_report.values()))
+            # Tune every model and collect cv_score / train_r2 / test_r2 / best_params.
+            model_report: dict = evaluate_models(
+                X_train=X_train, y_train=y_train, X_test=X_test, y_test=y_test,
+                models=models, param=params,
+            )
 
-            # To get best model name from dict
-            best_model_name = list(model_report.keys())[
-                list(model_report.values()).index(best_model_score)
-            ]
-            best_model = models[best_model_name]
-            best_model.fit(X_train,y_train)
+            self._log_to_mlflow(model_report)
 
-            if best_model_score<0.6:
-                raise CustomException("No best model found with R2 score >= 0.6",sys)
-            logging.info(f"Best found model on both training and testing dataset")
+            # Select the winner by cross-validated score -- NOT by the test set,
+            # which must stay untouched until the final, one-time evaluation.
+            best_model_name = max(model_report, key=lambda name: model_report[name]["cv_score"])
+            best_info = model_report[best_model_name]
+            best_model = models[best_model_name]  # already fitted inside evaluate_models
+
+            if best_info["test_r2"] < 0.6:
+                raise CustomException("No best model found with R2 score >= 0.6", sys)
+
+            logging.info(
+                f"Best model: {best_model_name} "
+                f"(cv_r2={best_info['cv_score']:.4f}, test_r2={best_info['test_r2']:.4f})"
+            )
 
             os.makedirs(
                 os.path.dirname(self.model_trainer_config.trained_model_file_path),
-                exist_ok=True
+                exist_ok=True,
             )
 
             save_object(
                 file_path=self.model_trainer_config.trained_model_file_path,
-                obj=best_model
+                obj=best_model,
             )
 
-            predicted=best_model.predict(X_test)
-            r2_square = r2_score(y_test, predicted)
-            return r2_square
-                
+            # Report the winner's held-out test R2 (recomputed here for clarity).
+            return r2_score(y_test, best_model.predict(X_test))
+
         except Exception as e:
-            raise CustomException(e,sys)
+            raise CustomException(e, sys)
+
+    # =============================================
+    # _log_to_mlflow
+    # ---------------------------------------------
+    # Logs one MLflow run per model (params + cv/train/test R2) so experiments
+    # are tracked and comparable. No-op if MLflow isn't installed.
+    # =============================================
+    def _log_to_mlflow(self, model_report):
+        if not _MLFLOW_AVAILABLE:
+            logging.info("MLflow not installed; skipping experiment tracking.")
+            return
+        try:
+            mlflow.set_experiment("student-math-score")
+            for name, info in model_report.items():
+                with mlflow.start_run(run_name=name):
+                    mlflow.log_param("model", name)
+                    mlflow.log_params(info["best_params"])
+                    mlflow.log_metric("cv_r2", info["cv_score"])
+                    mlflow.log_metric("train_r2", info["train_r2"])
+                    mlflow.log_metric("test_r2", info["test_r2"])
+        except Exception:
+            # Tracking must never break training.
+            logging.exception("MLflow logging failed; continuing without it.")
