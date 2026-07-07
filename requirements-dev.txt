@@ -1,0 +1,5 @@
+# Training & CI/dev dependencies (NOT needed by the deployed app).
+# Kept separate from requirements.txt so the production image on AWS stays slim.
+mlflow~=2.16
+pytest~=8.3
+ruff~=0.8
