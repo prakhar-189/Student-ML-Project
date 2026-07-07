@@ -20,7 +20,6 @@
 # =============================================
 
 import sys
-from src.logger import logging
 
 # =============================================
 # Function to Generate Detailed Error Messages
