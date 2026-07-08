@@ -4,6 +4,10 @@
 [![Python](https://img.shields.io/badge/python-3.11-blue.svg)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
+🔗 **[Live demo](http://student-marks-predictorweb.us-east-1.elasticbeanstalk.com/predictdata)** — deployed on AWS Elastic Beanstalk · ▶️ **[Watch the demo video](docs/Student%20Predictor%20Live%20Demo.mp4)**
+
+![Student Marks Predictor — live web app](docs/Live%20Website%20Home%20Page.png)
+
 An end-to-end regression ML application that predicts a student's **math score** from demographic and academic features. It pairs a clean, modular training pipeline with **MLflow experiment tracking**, an automated **test + CI** workflow, a **Dockerized Flask service** (HTML form + JSON API), and an AWS Elastic Beanstalk deployment.
 
 ---
@@ -132,9 +136,20 @@ docker run -p 5000:5000 student-marks-predictor
 
 ## ☁️ Deployment & CI/CD
 
-The app is deployment-ready for **AWS Elastic Beanstalk**, wired to **GitHub → CodePipeline → CodeBuild → Elastic Beanstalk** (`buildspec.yml`, `.ebextensions/`, `Procfile`) for automatic deployment on push. A separate GitHub Actions workflow (`ci.yml`) lints and tests every change.
+The app runs live on **AWS Elastic Beanstalk** (single-instance `t3.micro`, Python 3.11):
 
-> ℹ️ A public AWS demo URL may be intermittently offline, since the hosting resources can be torn down to avoid ongoing cloud costs. The app runs identically via `python app.py` or Docker.
+**→ [student-marks-predictorweb.us-east-1.elasticbeanstalk.com](http://student-marks-predictorweb.us-east-1.elasticbeanstalk.com/predictdata)**
+
+Gunicorn serves the WSGI app (`Procfile` → `gunicorn application:application`), with the platform configured via `.ebextensions/`. The repo also includes a CodeBuild spec (`buildspec.yml`) for a **GitHub → CodeBuild → Elastic Beanstalk** pipeline, so continuous deployment can be re-enabled at any time. On the code side, a GitHub Actions workflow (`ci.yml`) lints and tests every push.
+
+**Deploy an update manually:** build a clean source bundle from the committed code and upload it in the EB console:
+
+```bash
+git archive -o ../student-marks.zip HEAD   # zip only tracked files, at the archive root
+# EB console → environment → Upload and deploy → choose the zip → set a version label → Deploy
+```
+
+> ℹ️ The demo may occasionally be offline if the environment is paused to avoid cloud costs. The app runs identically via `python app.py` or Docker.
 
 ---
 
